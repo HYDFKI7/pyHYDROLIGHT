@@ -58,8 +58,12 @@ class ConcentrationProfile(object):
             self.usersupport = usersupport
 
 
+class PredefinedWavelengths:
+    GOCI = np.array([412, 443, 490, 555, 660, 680, 745, 865])
+
+
 class Wavelength(object):
-    def __init__(self, startwa=400, endwa=800, interval=10):
+    def __init__(self, startwa=400, endwa=700, interval=20):
         self.startwa = startwa
         self.endwa = endwa
         self.interval = interval
@@ -68,6 +72,7 @@ class Wavelength(object):
             stop=self.endwa,
             step=interval)
         self.length = len(self.wavelengths)
+        self.predefinedwavelengths = PredefinedWavelengths()
 
 
 class SpectifyAbsorption(object):
@@ -155,9 +160,12 @@ class OutputOptions:
         self.ioptrad = ioptrad
         self.nwskip = nwskip
 
+class Windspeed(object):
+    def __init__(self, windspeed=3):
+        self.windspeed = windspeed
+
 
 class AirWaterSurfaceBoundaryConditions(object):
-
     class SkyModel(object):
         def __init__(self, iskyradmodel=1, iskyirradmodel=0):
             """
@@ -218,6 +226,7 @@ class HYDROLIGHT(object):
         self.purewater = PureWater()
         self.minerals = Minerals()
         self.wavelength = Wavelength()
+        self.windspeed = Windspeed()
 
     def run(self):
         # icompile, Parmin, Parmax, PhiChl, Raman0, RamanXS, iDynZ
@@ -270,16 +279,12 @@ class HYDROLIGHT(object):
         sc = sc + "\n" + "{}".format(self.chl.phasefunction.name)
         sc = sc + "\n" + "{}".format(self.cdom.phasefunction.name)
         sc = sc + "\n" + "{}".format(self.minerals.phasefunction.name)
-        sc = sc + "\n" + "{}".format(self.wavelength.length)
-        [rows, cols] = self.wavelength.wavelengths.reshape(-1, 10).shape
-        for row in range(rows):
-            sc = sc + "\n" + "{}".format(str(self.wavelength.wavelengths.reshape(-1, 10)[
-                                         row, :]).replace(" ", ",").replace("[", "").replace("]", ""))
-        sc = sc + "\n" + "{}".format(self.wavelength.endwa)
+        sc = sc + "\n" + "{}".format(len(self.wavelength.predefinedwavelengths.GOCI)-1)
+        sc = sc + "\n" + "{}".format(str(self.wavelength.predefinedwavelengths.GOCI).replace(" ", ",").replace("[", "").replace("]", ""))
         sc = sc + "\n" + "0,0,0,0,2"
         sc = sc + "\n" + "2,3,30,0,0"
-        sc = sc + "\n" + "-1,0,0,29.92,1,80,2.5,15,4.99746,300"
-        sc = sc + "\n" + "2.99937,1.34,20,35"
+        sc = sc + "\n" + "-1,0,0,29.92,1,80,2.5,15,2.99937,300"
+        sc = sc + "\n" + "{},1.34,20,35".format(self.windspeed)
         sc = sc + "\n" + "0,0"
         sc = sc + "\n" + "0,2,0,10,"
         sc = sc + "\n" + "{}".format(self.purewater.abs.usersupport)
@@ -301,7 +306,7 @@ class HYDROLIGHT(object):
         with open("{}/run/runlist.txt".format(self.root), 'wt') as file:
             file.write("I{}.txt".format(self.runidentification.rootname))
         # Change directory
-        #old_dir = os.getcwd()
+        # old_dir = os.getcwd()
         os.chdir(self.root + "/run")
         os.system("runHL.exe")
         self.result = "M{}.txt".format(self.runidentification.rootname)
@@ -313,21 +318,15 @@ if __name__ == '__main__':
     hydrolight = HYDROLIGHT()
     # Input file name
     hydrolight.runidentification.rootname = "test"
-    hydrolight.wavelength.startwa = 400
-    hydrolight.wavelength.endwa = 900
-    chls = np.array([5, 10, 30, 50, 80, 100, 120, 140])
-    tsss = np.array([5, 10, 30, 50, 80, 100, 120, 140])
-    cdoms = np.array([0.4, 0.6, 0.8, 1.2, 1.6, 2, 2.4, 2.6])
-    for cdom in cdoms:
-        hydrolight.chl.constant.value = 20
-        hydrolight.cdom.constant.value = cdom
-        hydrolight.minerals.constant.value = 20
+
+    hydrolight.chl.constant.value = 5
+    hydrolight.cdom.constant.value = 0
+    hydrolight.minerals.constant.value = 30
+    windspeeds = np.arange(0, 16, 1)
+    for windspeed in windspeeds:
+        hydrolight.windspeed = windspeed
         hydrolight.run()
-        plt.plot(
-            hydrolight.outputs.rrs.wa,
-            hydrolight.outputs.rrs.Rrs,
-            label=cdom)
-    plt.legend()
-    plt.xlabel("wavelengths/nm")
-    plt.ylabel(r"$R_{rs}/sr^{-1}$")
+        plt.plot(hydrolight.outputs.rrs.wa, hydrolight.outputs.rrs.Rrs)
     plt.show()
+
+
